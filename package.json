@@ -1,0 +1,36 @@
+{
+  "name": "rocksdb-usage",
+  "version": "1.0.0",
+  "description": "Data size and disk usage for rocksdb-native databases",
+  "exports": {
+    ".": "./index.js",
+    "./package": "./package.json"
+  },
+  "files": [
+    "index.js"
+  ],
+  "scripts": {
+    "format": "prettier --write . && lunte --fix",
+    "lint": "prettier --check . && lunte",
+    "test": "npm run test:bare && npm run test:node",
+    "test:bare": "brittle-bare test.js",
+    "test:node": "brittle-node test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holepunchto/rocksdb-usage.git"
+  },
+  "author": "Holepunch Inc",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/rocksdb-usage/issues"
+  },
+  "homepage": "https://github.com/holepunchto/rocksdb-usage",
+  "devDependencies": {
+    "brittle": "^3.5.0",
+    "lunte": "^1.8.0",
+    "prettier": "^3.6.2",
+    "prettier-config-holepunch": "^2.0.0",
+    "rocksdb-native": "^3.18.1"
+  }
+}
