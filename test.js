@@ -126,6 +126,26 @@ test('suspend + getUsage + close', async (t) => {
   await call
 })
 
+test('getUsage + suspend does not wait for resume', async (t) => {
+  const db = new RocksDB(await t.tmp())
+  const a = db.columnFamily('a')
+  await db.ready()
+  await a.put('hello', 'world')
+
+  const call = settled(db, getUsage(db))
+
+  await db.suspend()
+  await db.resume()
+
+  const { beforeResume, value } = await call
+
+  t.is(beforeResume, true)
+  t.ok(value.families.a.keyCount > 0)
+
+  await a.close()
+  await db.close()
+})
+
 test('getDiskUsage reports every column family', async (t) => {
   const db = new RocksDB(await t.tmp())
   const a = db.columnFamily('a')
@@ -256,6 +276,27 @@ test('suspend + getDiskUsage + close', async (t) => {
 
   await db.close()
   await call
+})
+
+test('getDiskUsage + suspend does not wait for resume', async (t) => {
+  const db = new RocksDB(await t.tmp())
+  const a = db.columnFamily('a')
+  await db.ready()
+  await a.put('hello', 'world')
+  await a.flush()
+
+  const call = settled(db, getDiskUsage(db))
+
+  await db.suspend()
+  await db.resume()
+
+  const { beforeResume, value } = await call
+
+  t.is(beforeResume, true)
+  t.ok(value.families.a.sstBytes > 0)
+
+  await a.close()
+  await db.close()
 })
 
 test('getDiskUsage with files walks the database directory', async (t) => {
