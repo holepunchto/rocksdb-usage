@@ -22,7 +22,7 @@ console.log(await getDiskUsage(db))
 
 ## API
 
-Every call reports every open column family keyed by name, `default` included, gives the same result from any session, and waits for resume while the database is suspended.
+Every call reports every open column family keyed by name, `default` included, gives the same result from any session, and reads every family at the same moment. A call made while the database is suspended waits for resume, while one started before `suspend()` reads straight away and doesn't wait.
 
 #### `const usage = await getUsage(db)`
 

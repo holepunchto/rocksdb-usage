@@ -1,63 +1,82 @@
 const fs = require('fs')
 const { join } = require('path')
 
-exports.getUsage = async function getUsage(db) {
-  await db.ready()
-
-  const families = {}
-
-  for (const columnFamily of columnFamilies(db)) {
-    const [keyCount, liveDataBytes, memtableMemoryBytes] = await getProperties(db, columnFamily, [
+exports.getUsage = function getUsage(db) {
+  return withSessions(db, async (sessions) => {
+    const perFamily = await getFamilyProperties(sessions, [
       'rocksdb.estimate-num-keys',
       'rocksdb.estimate-live-data-size',
       'rocksdb.cur-size-all-mem-tables'
     ])
 
-    families[columnFamily.name] = { keyCount, liveDataBytes, memtableMemoryBytes }
-  }
+    const families = {}
 
-  return { families }
+    for (const [name, [keyCount, liveDataBytes, memtableMemoryBytes]] of perFamily) {
+      families[name] = { keyCount, liveDataBytes, memtableMemoryBytes }
+    }
+
+    return { families }
+  })
 }
 
 exports.getDiskUsage = async function getDiskUsage(db, { files = false } = {}) {
-  await db.ready()
-
-  const wal = await db.currentWalFile()
-  const fileUsage = files ? await getFileUsage(db.path) : null
-
-  const families = {}
-  let totalBlobGarbageBytes = 0
-
-  for (const columnFamily of columnFamilies(db)) {
-    const [sstBytes, blobBytes, blobGarbageBytes, pendingCompactionBytes] = await getProperties(
-      db,
-      columnFamily,
-      [
+  const usage = await withSessions(db, async (sessions) => {
+    const [perFamily, [obsoleteSstBytes, walOldestNumber], wal] = await Promise.all([
+      getFamilyProperties(sessions, [
         'rocksdb.total-sst-files-size',
         'rocksdb.total-blob-file-size',
         'rocksdb.live-blob-file-garbage-size',
         'rocksdb.estimate-pending-compaction-bytes'
-      ]
-    )
+      ]),
+      // Database-wide, so any family will do
+      getProperties(sessions[0], [
+        'rocksdb.obsolete-sst-files-size',
+        'rocksdb.min-log-number-to-keep'
+      ]),
+      db.currentWalFile()
+    ])
 
-    families[columnFamily.name] = { sstBytes, blobBytes, blobGarbageBytes, pendingCompactionBytes }
-    totalBlobGarbageBytes += blobGarbageBytes
-  }
+    const families = {}
+    let totalBlobGarbageBytes = 0
 
-  // Database-wide, so any family will do
-  const [obsoleteSstBytes, walOldestNumber] = await getProperties(db, columnFamilies(db)[0], [
-    'rocksdb.obsolete-sst-files-size',
-    'rocksdb.min-log-number-to-keep'
-  ])
+    for (const [name, values] of perFamily) {
+      const [sstBytes, blobBytes, blobGarbageBytes, pendingCompactionBytes] = values
 
-  return {
-    families,
-    obsoleteSstBytes,
-    walActiveNumber: wal.number,
-    walActiveBytes: wal.size,
-    walOldestNumber,
-    reclaimableBytes: obsoleteSstBytes + totalBlobGarbageBytes,
-    files: fileUsage
+      families[name] = { sstBytes, blobBytes, blobGarbageBytes, pendingCompactionBytes }
+      totalBlobGarbageBytes += blobGarbageBytes
+    }
+
+    return {
+      families,
+      obsoleteSstBytes,
+      walActiveNumber: wal.number,
+      walActiveBytes: wal.size,
+      walOldestNumber,
+      reclaimableBytes: obsoleteSstBytes + totalBlobGarbageBytes,
+      files: null
+    }
+  })
+
+  // The walk never waits for resume, so it can come after the reads
+  if (files) usage.files = await getFileUsage(db.path)
+
+  return usage
+}
+
+// fn has to start every read before its first await. Nothing else runs until then, so a suspend()
+// can't land between the reads: they all read now, or all wait for resume together.
+async function withSessions(db, fn) {
+  // Awaiting even a settled ready() yields, so only wait while opening
+  if (!db.opened) await db.ready()
+
+  const sessions = columnFamilies(db).map((columnFamily) =>
+    db.session({ columnFamily, snapshot: false })
+  )
+
+  try {
+    return await fn(sessions)
+  } finally {
+    for (const session of sessions) await session.close()
   }
 }
 
@@ -66,18 +85,17 @@ function columnFamilies(db) {
   return db._state.columnFamilies
 }
 
-async function getProperties(db, columnFamily, names) {
-  const session = db.session({ columnFamily, snapshot: false })
+function getFamilyProperties(sessions, names) {
+  return Promise.all(
+    sessions.map(async (session) => [
+      session.defaultColumnFamily.name,
+      await getProperties(session, names)
+    ])
+  )
+}
 
-  try {
-    const values = []
-
-    for (const name of names) values.push(Number(await session.getProperty(name)))
-
-    return values
-  } finally {
-    await session.close()
-  }
+function getProperties(session, names) {
+  return Promise.all(names.map(async (name) => Number(await session.getProperty(name))))
 }
 
 async function getFileUsage(dir) {
