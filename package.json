@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Data size and disk usage for rocksdb-native databases",
   "exports": {
-    ".": "./index.js",
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./package": "./package.json"
   },
   "imports": {
@@ -17,7 +20,9 @@
     }
   },
   "files": [
-    "index.js"
+    "index.js",
+    "index.d.ts",
+    "lib"
   ],
   "scripts": {
     "format": "prettier --write . && lunte --fix",

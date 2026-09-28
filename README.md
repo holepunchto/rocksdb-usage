@@ -48,7 +48,7 @@ Options include:
 
 ```js
 {
-  files: false // walk the database directory and fill in usage.files
+  includeFiles: false // walk the database directory and fill in usage.files
 }
 ```
 
@@ -67,13 +67,13 @@ Options include:
   "walActiveBytes": 0, // currentWalFile().size
   "walOldestNumber": 0, // min-log-number-to-keep, database-wide
   "reclaimableBytes": 0, // obsoleteSstBytes + blobGarbageBytes across families
-  "files": null // directory walk, only with { files: true }
+  "files": null // directory walk, only with { includeFiles: true }
 }
 ```
 
 `reclaimableBytes` is what compaction and blob GC actually free, so WAL, MANIFEST and LOG aren't in it.
 
-`{ files: true }` fills in `files` from a walk of the database directory. Everything else in the result is the same.
+`{ includeFiles: true }` fills in `files` from a walk of the database directory. Everything else in the result is the same.
 
 ```jsonc
 "files": {

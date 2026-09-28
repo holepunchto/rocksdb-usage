@@ -310,7 +310,7 @@ test('getDiskUsage with files walks the database directory', async (t) => {
   await blobs.put('big', Buffer.alloc(65536))
   await blobs.flush()
 
-  const { families, files } = await getDiskUsage(db, { files: true })
+  const { families, files } = await getDiskUsage(db, { includeFiles: true })
   const familySstBytes = Object.values(families).reduce((sum, family) => sum + family.sstBytes, 0)
   const familyBlobBytes = Object.values(families).reduce((sum, family) => sum + family.blobBytes, 0)
 
