@@ -40,9 +40,17 @@ What the data is.
 }
 ```
 
-#### `const usage = await getDiskUsage(db)`
+#### `const usage = await getDiskUsage(db, [options])`
 
 What the data costs on disk.
+
+Options include:
+
+```js
+{
+  files: false // walk the database directory and fill in usage.files
+}
+```
 
 ```jsonc
 {
@@ -59,11 +67,25 @@ What the data costs on disk.
   "walActiveBytes": 0, // currentWalFile().size
   "walOldestNumber": 0, // min-log-number-to-keep, database-wide
   "reclaimableBytes": 0, // obsoleteSstBytes + blobGarbageBytes across families
-  "files": null
+  "files": null // directory walk, only with { files: true }
 }
 ```
 
 `reclaimableBytes` is what compaction and blob GC actually free, so WAL, MANIFEST and LOG aren't in it.
+
+`{ files: true }` fills in `files` from a walk of the database directory. Everything else in the result is the same.
+
+```jsonc
+"files": {
+  "totalBytes": 0, "totalFiles": 0, // every file in the directory
+  "sstBytes": 0, "sstFiles": 0, // *.sst
+  "blobBytes": 0, "blobFiles": 0, // *.blob
+  "walBytes": 0, "walFiles": 0, // *.log, every WAL segment rather than just the active one
+  "otherBytes": 0, "otherFiles": 0 // MANIFEST, OPTIONS, CURRENT, LOCK, IDENTITY, SESSION_ID and the plain-text LOG
+}
+```
+
+It's the only way to get total WAL size and the files that aren't part of the database.
 
 ## License
 

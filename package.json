@@ -6,6 +6,16 @@
     ".": "./index.js",
     "./package": "./package.json"
   },
+  "imports": {
+    "fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "path": {
+      "bare": "bare-path",
+      "default": "path"
+    }
+  },
   "files": [
     "index.js"
   ],
@@ -26,6 +36,10 @@
     "url": "https://github.com/holepunchto/rocksdb-usage/issues"
   },
   "homepage": "https://github.com/holepunchto/rocksdb-usage",
+  "dependencies": {
+    "bare-fs": "^4.5.0",
+    "bare-path": "^3.0.0"
+  },
   "devDependencies": {
     "brittle": "^3.5.0",
     "lunte": "^1.8.0",

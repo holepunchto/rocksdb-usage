@@ -1,3 +1,6 @@
+const fs = require('fs')
+const { join } = require('path')
+
 exports.getUsage = async function getUsage(db) {
   await db.ready()
 
@@ -16,10 +19,11 @@ exports.getUsage = async function getUsage(db) {
   return { families }
 }
 
-exports.getDiskUsage = async function getDiskUsage(db) {
+exports.getDiskUsage = async function getDiskUsage(db, { files = false } = {}) {
   await db.ready()
 
   const wal = await db.currentWalFile()
+  const fileUsage = files ? await getFileUsage(db.path) : null
 
   const families = {}
   let totalBlobGarbageBytes = 0
@@ -53,7 +57,7 @@ exports.getDiskUsage = async function getDiskUsage(db) {
     walActiveBytes: wal.size,
     walOldestNumber,
     reclaimableBytes: obsoleteSstBytes + totalBlobGarbageBytes,
-    files: null
+    files: fileUsage
   }
 }
 
@@ -74,4 +78,48 @@ async function getProperties(db, columnFamily, names) {
   } finally {
     await session.close()
   }
+}
+
+async function getFileUsage(dir) {
+  const usage = {
+    totalBytes: 0,
+    totalFiles: 0,
+    sstBytes: 0,
+    sstFiles: 0,
+    blobBytes: 0,
+    blobFiles: 0,
+    walBytes: 0,
+    walFiles: 0,
+    otherBytes: 0,
+    otherFiles: 0
+  }
+
+  for (const entry of await fs.promises.readdir(dir, { withFileTypes: true })) {
+    if (!entry.isFile()) continue
+
+    let size
+
+    try {
+      size = (await fs.promises.stat(join(dir, entry.name))).size
+    } catch (err) {
+      if (err.code === 'ENOENT') continue
+      throw err
+    }
+
+    const kind = fileKind(entry.name)
+
+    usage[kind + 'Bytes'] += size
+    usage[kind + 'Files']++
+    usage.totalBytes += size
+    usage.totalFiles++
+  }
+
+  return usage
+}
+
+function fileKind(name) {
+  if (name.endsWith('.sst')) return 'sst'
+  if (name.endsWith('.blob')) return 'blob'
+  if (name.endsWith('.log')) return 'wal'
+  return 'other'
 }
