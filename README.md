@@ -77,15 +77,15 @@ Options include:
 
 ```jsonc
 "files": {
-  "totalBytes": 0, "totalFiles": 0, // every file in the directory
-  "sstBytes": 0, "sstFiles": 0, // *.sst
-  "blobBytes": 0, "blobFiles": 0, // *.blob
-  "walBytes": 0, "walFiles": 0, // *.log, every WAL segment rather than just the active one
-  "otherBytes": 0, "otherFiles": 0 // MANIFEST, OPTIONS, CURRENT, LOCK, IDENTITY, SESSION_ID and the plain-text LOG
+  "totalBytes": 0, "totalAllocatedBytes": 0, "totalFiles": 0, // every file under the directory, subdirectories and hidden files included
+  "sstBytes": 0, "sstAllocatedBytes": 0, "sstFiles": 0, // *.sst
+  "blobBytes": 0, "blobAllocatedBytes": 0, "blobFiles": 0, // *.blob
+  "walBytes": 0, "walAllocatedBytes": 0, "walFiles": 0, // *.log, every WAL segment rather than just the active one, archive/ included
+  "otherBytes": 0, "otherAllocatedBytes": 0, "otherFiles": 0 // MANIFEST, OPTIONS, CURRENT, LOCK, IDENTITY, SESSION_ID and the plain-text LOG
 }
 ```
 
-It's the only way to get total WAL size and the files that aren't part of the database.
+`*Bytes` are file sizes, the same measure as the rest of the result. `*AllocatedBytes` are the disk space the files take up, which includes block rounding and the space RocksDB reserves ahead for the WAL and MANIFEST on Linux, Android and Windows, so `totalAllocatedBytes` is what the database costs on disk. It's the only way to get the total disk space, including every WAL segment and the files that aren't part of the database.
 
 ## License
 

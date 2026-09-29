@@ -1,4 +1,6 @@
 const test = require('brittle')
+const fs = require('fs')
+const { join } = require('path')
 const RocksDB = require('rocksdb-native')
 const { getUsage, getDiskUsage } = require('.')
 
@@ -316,17 +318,30 @@ test('getDiskUsage with files walks the database directory', async (t) => {
 
   t.alike(Object.keys(files), [
     'totalBytes',
+    'totalAllocatedBytes',
     'totalFiles',
     'sstBytes',
+    'sstAllocatedBytes',
     'sstFiles',
     'blobBytes',
+    'blobAllocatedBytes',
     'blobFiles',
     'walBytes',
+    'walAllocatedBytes',
     'walFiles',
     'otherBytes',
+    'otherAllocatedBytes',
     'otherFiles'
   ])
+  t.ok(Object.values(files).every(Number.isFinite))
   t.is(files.totalBytes, files.sstBytes + files.blobBytes + files.walBytes + files.otherBytes)
+  t.is(
+    files.totalAllocatedBytes,
+    files.sstAllocatedBytes +
+      files.blobAllocatedBytes +
+      files.walAllocatedBytes +
+      files.otherAllocatedBytes
+  )
   t.is(files.totalFiles, files.sstFiles + files.blobFiles + files.walFiles + files.otherFiles)
   t.ok(files.sstBytes >= familySstBytes)
   t.ok(files.blobBytes >= familyBlobBytes)
@@ -335,6 +350,59 @@ test('getDiskUsage with files walks the database directory', async (t) => {
   t.ok(files.otherFiles > 0)
 
   await blobs.close()
+  await db.close()
+})
+
+test('getDiskUsage with files counts archived WAL segments', async (t) => {
+  const dir = await t.tmp()
+  const db = new RocksDB(dir, { walTtlSeconds: 3600 })
+
+  for (let i = 0; i < 3; i++) {
+    await db.put('key' + i, Buffer.alloc(4096))
+    await db.flush()
+  }
+
+  const archived = await fs.promises.readdir(join(dir, 'archive'))
+  const { files } = await getDiskUsage(db, { includeFiles: true })
+
+  t.ok(archived.length > 0)
+  t.ok(files.walFiles >= archived.length + 1)
+
+  await db.close()
+})
+
+test('getDiskUsage with files counts hidden files in subdirectories', async (t) => {
+  const dir = await t.tmp()
+  const db = new RocksDB(dir)
+
+  await db.put('hello', 'world')
+  await db.flush()
+
+  const before = await getDiskUsage(db, { includeFiles: true })
+
+  await fs.promises.mkdir(join(dir, 'nested'))
+  await fs.promises.writeFile(join(dir, 'nested', '.hidden'), Buffer.alloc(65536))
+
+  const after = await getDiskUsage(db, { includeFiles: true })
+
+  t.is(after.files.otherFiles, before.files.otherFiles + 1)
+  t.is(after.files.totalFiles, before.files.totalFiles + 1)
+  t.ok(after.files.otherBytes >= before.files.otherBytes + 65536)
+  t.ok(after.files.otherAllocatedBytes >= before.files.otherAllocatedBytes + 65536)
+
+  await db.close()
+})
+
+test('getDiskUsage with files reports allocated bytes next to file size', async (t) => {
+  const db = new RocksDB(await t.tmp())
+  await db.put('hello', 'world')
+
+  const { walActiveBytes, files } = await getDiskUsage(db, { includeFiles: true })
+
+  t.is(files.walFiles, 1)
+  t.is(files.walBytes, walActiveBytes)
+  t.ok(files.walAllocatedBytes > files.walBytes)
+
   await db.close()
 })
 

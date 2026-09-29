@@ -56,29 +56,57 @@ export interface FamilyDiskUsage {
   pendingCompactionBytes: number
 }
 
+/**
+ * `*Bytes` are file sizes, the same measure as the rest of the result.
+ * `*AllocatedBytes` are the disk space the files take up: whole blocks, plus
+ * space RocksDB reserves ahead for the WAL and MANIFEST on Linux, Android and
+ * Windows. `totalAllocatedBytes` is what the database costs on disk.
+ */
 export interface FileUsage {
-  /** Every file in the database directory. */
+  /**
+   * Size of every file under the database directory, including hidden files
+   * and subdirectories such as `archive/`.
+   */
   totalBytes: number
-  /** Number of files in the database directory. */
+  /**
+   * Disk space every file under the database directory takes up. This is what
+   * the database costs on disk.
+   */
+  totalAllocatedBytes: number
+  /** Number of files under the database directory. */
   totalFiles: number
-  /** `*.sst` files. */
+  /** Size of the `*.sst` files. */
   sstBytes: number
+  /** Disk space the `*.sst` files take up. */
+  sstAllocatedBytes: number
   /** Number of `*.sst` files. */
   sstFiles: number
-  /** `*.blob` files. */
+  /** Size of the `*.blob` files. */
   blobBytes: number
+  /** Disk space the `*.blob` files take up. */
+  blobAllocatedBytes: number
   /** Number of `*.blob` files. */
   blobFiles: number
   /**
-   * `*.log` files, meaning every WAL segment on disk, not just the active one.
-   * That includes older segments that a family with unflushed writes is still
-   * keeping alive. The plain-text `LOG` isn't a WAL and counts under `other`.
+   * Size of the `*.log` files, meaning every WAL segment on disk, not just the
+   * active one. That includes older segments that a family with unflushed
+   * writes is still keeping alive, and the ones moved to `archive/` when
+   * `walTtlSeconds` or `walSizeLimitMegabytes` is set. The plain-text `LOG`
+   * isn't a WAL and counts under `other`.
    */
   walBytes: number
+  /**
+   * Disk space the `*.log` files take up. On Linux, Android and Windows this
+   * includes the space RocksDB reserves ahead for the active WAL, so it can be
+   * far above `walBytes`.
+   */
+  walAllocatedBytes: number
   /** Number of `*.log` files. */
   walFiles: number
   /** Everything else: MANIFEST, OPTIONS, CURRENT, LOCK, IDENTITY, SESSION_ID and `LOG`. */
   otherBytes: number
+  /** Disk space the other files take up. */
+  otherAllocatedBytes: number
   /** Number of other files. */
   otherFiles: number
 }
@@ -101,7 +129,8 @@ export interface DiskUsage {
   walActiveNumber: number
   /**
    * `currentWalFile().size`. The active WAL only. A flush can start a new WAL,
-   * which drops this back to 0. Use `files.walBytes` for every segment.
+   * which drops this back to 0. Use `files.walBytes` for every segment, or
+   * `files.walAllocatedBytes` for the disk space they take up.
    */
   walActiveBytes: number
   /**
@@ -155,9 +184,11 @@ export function getUsage(db: any): Promise<Usage>
  * Report what the data costs on disk, and walk the database directory to fill
  * in `files`.
  *
- * The walk is the only way to get the total WAL size and the files that aren't
- * part of the database, such as MANIFEST, OPTIONS and LOG. Everything else in
- * the result is the same as without it.
+ * The walk is the only way to get the total disk space, including every WAL
+ * segment and the files that aren't part of the database, such as MANIFEST,
+ * OPTIONS and LOG. It reports both the file sizes and the disk space the files
+ * take up, which includes block rounding and space RocksDB has reserved ahead.
+ * Everything else in the result is the same as without it.
  *
  * @param db A rocksdb-native `>=3.18.1` database or session. Every session
  * gives the same result.
@@ -171,7 +202,7 @@ export function getUsage(db: any): Promise<Usage>
  * const db = new RocksDB('./example.db')
  * const { files } = await getDiskUsage(db, { includeFiles: true })
  *
- * console.log(files.totalBytes, files.walBytes, files.walFiles)
+ * console.log(files.totalAllocatedBytes, files.totalBytes)
  */
 export function getDiskUsage(
   db: any,
