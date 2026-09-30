@@ -1,6 +1,6 @@
 {
   "name": "rocksdb-usage",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Data size and disk usage for rocksdb-native databases",
   "exports": {
     ".": {
